@@ -12,14 +12,15 @@ datasource db {
 //------User Schema----------------
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      Role     @default(EMPLOYEE)
-  tickets   Ticket[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String             @id @default(cuid())
+  name          String
+  email         String             @unique
+  password      String
+  role          Role               @default(EMPLOYEE)
+  tickets       Ticket[]
+  overrideLogs  OverrideAuditLog[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 }
 
 
@@ -37,9 +38,22 @@ model Ticket {
   resolvedAt  DateTime?
   userId      String
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  overrideLogs OverrideAuditLog[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
+}
+
+model OverrideAuditLog {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  agentId   String
+  agent     User     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  field     String
+  fromValue String
+  toValue   String
+  createdAt DateTime @default(now())
 }
 
 enum Role {

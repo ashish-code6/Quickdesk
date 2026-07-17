@@ -16,6 +16,7 @@ import { RolesGuard } from 'src/common/guards/roles/roles.guard';
 import { Roles } from 'src/common/decorators/roles/roles.decorator';
 import { Role } from 'generated/prisma/enums';
 import { ReplyTicketDto } from './dto/reply-ticket.dto';
+import { OverrideTicketDto } from './dto/override-ticket.dto';
 // import { Role } from 'generated/prisma';
 
 @Controller('tickets')
@@ -26,7 +27,8 @@ export class TicketsController {
 
     ) { }
 
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(Role.EMPLOYEE)
     @Post()
     create(
         @Body() createTicketDto: CreateTicketDto,
@@ -54,6 +56,35 @@ export class TicketsController {
     @Get()
     findAll() {
         return this.ticketsService.findAll();
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Get(":id")
+    findOne(
+        @Param("id") id: string,
+        @Request() req,
+    ) {
+        return this.ticketsService.findOne(
+            Number(id),
+            req.user,
+        );
+    }
+
+    // ------------------Agent override category/priority-----------------------
+
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(Role.AGENT)
+    @Patch(":id/override")
+    override(
+        @Param("id") id: string,
+        @Body() overrideTicketDto: OverrideTicketDto,
+        @Request() req,
+    ) {
+        return this.ticketsService.override(
+            Number(id),
+            overrideTicketDto,
+            req.user.id,
+        );
     }
 
     // ------------------for reply on Ticket-----------------------
