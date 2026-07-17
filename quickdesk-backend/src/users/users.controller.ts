@@ -2,13 +2,15 @@ import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto/create-user.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth/jwt-auth.guard';
+import { Roles } from 'src/common/decorators/roles/roles.decorator';
+import { RolesGuard } from 'src/common/guards/roles/roles.guard';
 
 @Controller('users')
 export class UsersController {
 
   constructor(
     private readonly usersService: UsersService,
-  ) {}
+  ) { }
 
   @Post()
   create(
@@ -17,11 +19,19 @@ export class UsersController {
     return this.usersService.create(createUserDto);
   }
 
-    @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   @Get('profile')
   getProfile() {
     return {
       message: 'You are authorized',
+    };
+  }
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('AGENT')
+  @Get('agent')
+  adminRoute() {
+    return {
+      message: 'Welcome Agent',
     };
   }
 
