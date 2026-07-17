@@ -17,11 +17,52 @@ model User {
   email     String   @unique
   password  String
   role      Role     @default(EMPLOYEE)
+  tickets   Ticket[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+
+model Ticket {
+
+  id          Int              @id @default(autoincrement())
+  title       String
+  description String
+  attachment  String?
+  status      TicketStatus     @default(OPEN)
+  category    TicketCategory   @default(OTHER)
+  priority    TicketPriority   @default(MEDIUM)
+  aiSuggested Boolean          @default(true)
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
 }
 
 enum Role {
   EMPLOYEE
   AGENT
+}
+
+//------------Ticket----------------
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum TicketCategory {
+  IT
+  HR
+  FINANCE
+  ADMIN
+  OTHER
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
 }
