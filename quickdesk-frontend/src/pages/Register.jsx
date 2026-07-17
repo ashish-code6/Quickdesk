@@ -1,5 +1,48 @@
 import { Link } from "react-router-dom";
+import { User, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import api from "../services/api";
+import toast from "react-hot-toast";
+
 const Register = () => {
+
+    const [showPassword, setShowPassword] = useState(false);
+
+    const [formData, setFormData] = useState({
+        name: "",
+        email: "",
+        password: "",
+    });
+
+    const handleChange = (e) => {
+        setFormData({
+            ...formData,
+            [e.target.name]: e.target.value,
+        });
+    };
+
+    const navigate = useNavigate();
+
+const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  try {
+    const response = await api.post("/auth/register", formData);
+
+    toast.success("Registration Successful");
+
+    navigate("/login");
+
+  } catch (error) {
+
+    toast.error(
+      error.response?.data?.message || "Something went wrong"
+    );
+
+  }
+};
+
     return (
         <>
             <div className="min-h-screen overflow-hidden grid lg:grid-cols-2">
@@ -45,17 +88,27 @@ const Register = () => {
                             Create your QuickDesk account.
                         </p>
 
-                        <form className="mt-6 space-y-4">
+                        <form   onSubmit={handleSubmit} className="mt-6 space-y-4">
                             <div>
                                 <label className="mb-2 block text-sm font-medium text-slate-700">
                                     Full Name
                                 </label>
 
-                                <input
-                                    type="text"
-                                    placeholder="Enter your full name"
-                                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-200"
-                                />
+                                <div className="relative">
+                                    <User
+                                        size={20}
+                                        className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                                    />
+
+                                    <input
+                                        type="text"
+                                        name="name"
+                                        value={formData.name}
+                                        onChange={handleChange}
+                                        placeholder="Enter your full name"
+                                        className="w-full rounded-xl border border-slate-300 py-3 pl-12 pr-4 outline-none transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-200"
+                                    />
+                                </div>
                             </div>
 
                             <div>
@@ -63,11 +116,21 @@ const Register = () => {
                                     Email
                                 </label>
 
-                                <input
-                                    type="email"
-                                    placeholder="Enter your email"
-                                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-200"
-                                />
+                                <div className="relative">
+                                    <Mail
+                                        size={20}
+                                        className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                                    />
+
+                                    <input
+                                        type="email"
+                                        name="email"
+                                        value={formData.email}
+                                        onChange={handleChange}
+                                        placeholder="Enter your email"
+                                        className="w-full rounded-xl border border-slate-300 py-3 pl-12 pr-4 outline-none transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-200"
+                                    />
+                                </div>
                             </div>
 
                             <div>
@@ -75,11 +138,30 @@ const Register = () => {
                                     Password
                                 </label>
 
-                                <input
-                                    type="password"
-                                    placeholder="Enter your password"
-                                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-200"
-                                />
+                                <div className="relative">
+                                    <Lock
+                                        size={20}
+                                        className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                                    />
+
+                                    <input
+
+                                        type={showPassword ? "text" : "password"}
+                                        name="password"
+                                        value={formData.password}
+                                        onChange={handleChange}
+                                        placeholder="Enter your password"
+                                        className="w-full rounded-xl border border-slate-300 py-3 pl-12 pr-12 outline-none transition-all focus:border-indigo-600 focus:ring-2 focus:ring-indigo-200"
+                                    />
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500"
+                                    >
+                                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                    </button>
+                                </div>
                             </div>
 
                             <button
@@ -88,7 +170,7 @@ const Register = () => {
                             >
                                 Create Account
                             </button>
-                        </form>
+                        </form >
 
                         <p className="mt-5 text-center text-sm text-slate-600">
                             Already have an account?{" "}
