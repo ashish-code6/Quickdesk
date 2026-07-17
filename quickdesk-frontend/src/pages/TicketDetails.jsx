@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Paperclip, Send } from "lucide-react";
+import { ArrowLeft, History, Paperclip, Save, Send } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../services/api";
 import { formatTicketStatus, getStatusBadgeClass } from "../utils/ticketStyles";
+
+const categories = ["IT", "HR", "FINANCE", "ADMIN", "OTHER"];
+const priorities = ["LOW", "MEDIUM", "HIGH"];
 
 const TicketDetails = () => {
   const { id } = useParams();
@@ -13,22 +16,61 @@ const TicketDetails = () => {
   const [loading, setLoading] = useState(true);
   const [finalReply, setFinalReply] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [overrideData, setOverrideData] = useState({
+    category: "",
+    priority: "",
+  });
+  const [savingOverride, setSavingOverride] = useState(false);
+
+  const loadTicket = async () => {
+    try {
+      const { data } = await api.get(`/tickets/${id}`);
+      setTicket(data);
+      setOverrideData({
+        category: data.category,
+        priority: data.priority,
+      });
+    } catch {
+      setTicket(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadTicket = async () => {
-      try {
-        const { data } = await api.get(isAgent ? "/tickets" : "/tickets/my");
-        const foundTicket = data.find((item) => String(item.id) === String(id));
-        setTicket(foundTicket || null);
-      } catch {
-        setTicket(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadTicket();
-  }, [id, isAgent]);
+  }, [id]);
+
+  const handleOverrideSubmit = async (e) => {
+    e.preventDefault();
+
+    const payload = {};
+
+    if (overrideData.category && overrideData.category !== ticket.category) {
+      payload.category = overrideData.category;
+    }
+
+    if (overrideData.priority && overrideData.priority !== ticket.priority) {
+      payload.priority = overrideData.priority;
+    }
+
+    if (!payload.category && !payload.priority) {
+      toast.error("Change category or priority first");
+      return;
+    }
+
+    setSavingOverride(true);
+
+    try {
+      await api.patch(`/tickets/${id}/override`, payload);
+      await loadTicket();
+      toast.success("Ticket updated");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Unable to update ticket");
+    } finally {
+      setSavingOverride(false);
+    }
+  };
 
   const handleReplySubmit = async (e) => {
     e.preventDefault();
@@ -41,11 +83,11 @@ const TicketDetails = () => {
     setSubmitting(true);
 
     try {
-      const { data } = await api.patch(`/tickets/${id}/reply`, {
+      await api.patch(`/tickets/${id}/reply`, {
         finalReply: finalReply.trim(),
       });
 
-      setTicket(data);
+      await loadTicket();
       setFinalReply("");
       toast.success("Ticket resolved");
     } catch (error) {
@@ -112,10 +154,86 @@ const TicketDetails = () => {
           </div>
         )}
 
+        {isAgent && (
+          <form onSubmit={handleOverrideSubmit} className="mt-6 rounded-lg border border-slate-200 p-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div className="grid flex-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Override category</label>
+                  <select
+                    value={overrideData.category}
+                    onChange={(e) => setOverrideData((current) => ({ ...current, category: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-indigo-600"
+                  >
+                    {categories.map((category) => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Override priority</label>
+                  <select
+                    value={overrideData.priority}
+                    onChange={(e) => setOverrideData((current) => ({ ...current, priority: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-indigo-600"
+                  >
+                    {priorities.map((priority) => (
+                      <option key={priority} value={priority}>{priority}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingOverride}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <Save size={17} />
+                {savingOverride ? "Saving..." : "Save Override"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {isAgent && (
+          <div className="mt-6 rounded-lg border border-slate-200 p-4">
+            <div className="flex items-center gap-2">
+              <History size={18} className="text-slate-500" />
+              <h2 className="font-semibold text-slate-900">Override Audit Log</h2>
+            </div>
+
+            <div className="mt-4 divide-y divide-slate-100">
+              {(ticket.overrideLogs || []).map((log) => (
+                <div key={log.id} className="py-3 text-sm">
+                  <p className="font-medium text-slate-900">
+                    {log.field} changed from {log.fromValue} to {log.toValue}
+                  </p>
+                  <p className="mt-1 text-slate-500">
+                    By {log.agent?.name || "Agent"} on {new Date(log.createdAt).toLocaleString()}
+                  </p>
+                </div>
+              ))}
+
+              {(ticket.overrideLogs || []).length === 0 && (
+                <p className="py-3 text-sm text-slate-500">No overrides recorded.</p>
+              )}
+            </div>
+          </div>
+        )}
+
         {ticket.attachment && (
           <div className="mt-6 inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700">
             <Paperclip size={16} />
             {ticket.attachment}
+          </div>
+        )}
+
+        {ticket.finalReply && (
+          <div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <p className="text-sm font-semibold text-emerald-900">Final Reply</p>
+            <p className="mt-2 whitespace-pre-wrap text-sm text-emerald-800">{ticket.finalReply}</p>
           </div>
         )}
 
