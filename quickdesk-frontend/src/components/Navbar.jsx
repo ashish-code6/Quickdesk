@@ -2,6 +2,8 @@ import { Bell, Search } from "lucide-react";
 
 
 const Navbar = () => {
+  const user = JSON.parse(localStorage.getItem("user"));
+  const initial = user?.name?.charAt(0) || user?.email?.charAt(0) || "U";
 
   return (
 
@@ -58,19 +60,19 @@ const Navbar = () => {
 
 
           <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold">
-            A
+            {initial.toUpperCase()}
           </div>
 
 
           <div>
 
             <p className="text-sm font-semibold text-slate-800">
-              Ashish
+              {user?.name || "User"}
             </p>
 
 
             <p className="text-xs text-slate-500">
-              Employee
+              {user?.role || "EMPLOYEE"}
             </p>
 
 

@@ -11,7 +11,8 @@ import { NavLink, useNavigate } from "react-router-dom";
 
 const Sidebar = () => {
 
- const user = JSON.parse(localStorage.getItem("user"));
+  const user = JSON.parse(localStorage.getItem("user"));
+  const isAgent = user?.role === "AGENT";
   const navigate = useNavigate();
 
 
@@ -29,21 +30,36 @@ const Sidebar = () => {
       name: "Dashboard",
       path: "/dashboard",
       icon: LayoutDashboard,
+      end: true,
     },
-    {
-      name: "My Tickets",
-      path: "/tickets",
-      icon: Ticket,
-    },
-    {
-      name: "Create Ticket",
-      path: "/tickets/create",
-      icon: PlusCircle,
-    },
+    ...(isAgent
+      ? [
+          {
+            name: "All Tickets",
+            path: "/tickets",
+            icon: Ticket,
+            end: true,
+          },
+        ]
+      : [
+          {
+            name: "My Tickets",
+            path: "/tickets",
+            icon: Ticket,
+            end: true,
+          },
+          {
+            name: "Create Ticket",
+            path: "/tickets/create",
+            icon: PlusCircle,
+            end: true,
+          },
+        ]),
     {
       name: "Profile",
       path: "/profile",
       icon: User,
+      end: true,
     },
   ];
 
@@ -88,6 +104,8 @@ const Sidebar = () => {
                 key={item.name}
 
                 to={item.path}
+
+                end={item.end}
 
 
                 className={({isActive}) =>
