@@ -1,4 +1,4 @@
-import { PrismaClient, Role } from "../generated/prisma";
+import { PrismaClient, Role } from "@prisma/client";
 import * as bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
@@ -10,7 +10,11 @@ async function main() {
     where: {
       email: "agent@quickdesk.com",
     },
-    update: {},
+    update: {
+      name: "Support Agent",
+      password: hashedPassword,
+      role: Role.AGENT,
+    },
     create: {
       name: "Support Agent",
       email: "agent@quickdesk.com",
@@ -19,11 +23,14 @@ async function main() {
     },
   });
 
-  console.log("✅ Agent seeded");
+  console.log("✅ Agent account seeded successfully");
 }
 
 main()
-  .catch(console.error)
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  })
   .finally(async () => {
     await prisma.$disconnect();
   });
