@@ -33,6 +33,8 @@ model Ticket {
   category    TicketCategory   @default(OTHER)
   priority    TicketPriority   @default(MEDIUM)
   aiSuggested Boolean          @default(true)
+  finalReply  String?
+  resolvedAt  DateTime?
   userId      String
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime         @default(now())

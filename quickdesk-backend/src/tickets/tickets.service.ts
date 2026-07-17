@@ -83,6 +83,8 @@ export class TicketsService {
 
     data: {
       status: TicketStatus.RESOLVED,
+      finalReply: replyTicketDto.finalReply,
+      resolvedAt: new Date(),
     },
 
   });
