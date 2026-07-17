@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
 import api from "../services/api";
+import { formatTicketStatus, getStatusBadgeClass } from "../utils/ticketStyles";
 
 const statuses = ["ALL", "OPEN", "IN_PROGRESS", "RESOLVED"];
 const categories = ["ALL", "IT", "HR", "FINANCE", "ADMIN", "OTHER"];
@@ -104,7 +105,11 @@ const MyTickets = () => {
               <tr key={ticket.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 font-medium text-slate-900">{ticket.title}</td>
                 {isAgent && <td className="px-4 py-3 text-sm text-slate-600">{ticket.user?.name || "Employee"}</td>}
-                <td className="px-4 py-3 text-sm text-slate-600">{ticket.status}</td>
+                <td className="px-4 py-3 text-sm">
+                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${getStatusBadgeClass(ticket.status)}`}>
+                    {formatTicketStatus(ticket.status)}
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-sm text-slate-600">{ticket.category}</td>
                 <td className="px-4 py-3 text-sm text-slate-600">{ticket.priority}</td>
                 <td className="px-4 py-3 text-right">

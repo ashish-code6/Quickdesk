@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import { ReplyTicketDto } from './dto/reply-ticket.dto';
+import { TicketStatus } from '@prisma/client';
 
 
 @Injectable()
@@ -10,16 +12,6 @@ export class TicketsService {
         private readonly prisma: PrismaService,
     ) { }
 
-    //   async create(
-    //     createTicketDto: CreateTicketDto,
-    //     userId: string,
-    //   ) {
-
-    //     return {
-    //       message: "Create Ticket API Working",
-    //     };
-
-    //   }
 
     async create(
         createTicketDto: CreateTicketDto,
@@ -75,5 +67,28 @@ export class TicketsService {
 
 
     }
+
+    // -------Agent Reply -----------------
+
+    async reply(
+  id: number,
+  replyTicketDto: ReplyTicketDto,
+) {
+
+  return await this.prisma.ticket.update({
+
+    where: {
+      id,
+    },
+
+    data: {
+      status: TicketStatus.RESOLVED,
+    },
+
+  });
+
+}
+
+
 
 }

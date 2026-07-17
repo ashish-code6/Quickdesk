@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PlusCircle, TicketCheck } from "lucide-react";
 import api from "../services/api";
+import { formatTicketStatus, getStatusBadgeClass } from "../utils/ticketStyles";
 
 const Dashboard = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -92,8 +93,8 @@ const Dashboard = () => {
                 <p className="font-medium text-slate-900">{ticket.title}</p>
                 <p className="text-sm text-slate-500">{ticket.category} • {ticket.priority}</p>
               </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                {ticket.status}
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${getStatusBadgeClass(ticket.status)}`}>
+                {formatTicketStatus(ticket.status)}
               </span>
             </Link>
           ))}
