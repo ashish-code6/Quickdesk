@@ -1,263 +1,200 @@
-# QuickDesk Backend
+# QuickDesk Frontend
 
-## About
+QuickDesk is an AI-assisted helpdesk frontend built for the coding assessment. It gives employees a simple way to raise tickets and gives agents a clean workspace to review, reply, resolve, and audit support requests.
 
-QuickDesk is the backend of an AI-assisted helpdesk system built with NestJS.
+The frontend is intentionally simple and practical. The main focus is on the real helpdesk workflow, not on extra decoration.
 
-Employees can create support tickets, while agents can manage and resolve them. AI helps by suggesting the ticket category, priority, and a reply using a small knowledge base through a RAG pipeline.
+## Tech Stack
 
-The goal of the project is to reduce the agent's work while keeping the final decision in the hands of the agent.
+- React
+- Vite
+- Tailwind CSS
+- Axios
+- React Router
+- React Hot Toast
+- Lucide React Icons
 
----
+## Main Roles
 
-# Tech Stack
+### Employee
 
-- NestJS
-- TypeScript
-- PostgreSQL
-- Prisma ORM
-- JWT
-- Passport JWT
-- bcrypt
-- Groq (Llama 3.3)
-- LangChain
-- Memory Vector Store
+Employees can:
 
----
+- Register and login
+- Create a support ticket
+- Add title, description, and optional attachment filename
+- Ask for an AI category and priority suggestion before submitting
+- View only their own tickets
+- Track ticket status
+- View the final reply after an agent resolves the ticket
 
-# Backend Workflow
+### Agent
 
-## Authentication Flow
+Agents can:
+
+- Login with an agent account
+- View all submitted tickets
+- Filter tickets by status, category, and priority
+- Search tickets by title
+- Open ticket details
+- See employee information
+- See AI-suggested category and priority
+- Override category or priority
+- View override audit history
+- See AI-drafted reply with knowledge base citations
+- Edit the reply and resolve the ticket
+
+## Pages
+
+| Page | Purpose |
+|------|---------|
+| Login | User login and JWT storage |
+| Register | Employee account creation |
+| Dashboard | Role-based overview |
+| Create Ticket | Employee ticket submission |
+| My Tickets / All Tickets | Employee sees own tickets, agent sees all tickets |
+| Ticket Details | Ticket information, AI draft, override, audit log, and reply |
+| Profile | Basic logged-in user information |
+
+## Frontend Workflow
+
+### Employee Ticket Flow
 
 ```text
-## Registration Flow
-
-```text
-User
-   │
-   ▼
-Register Request
-(Example: name, email, password)
-   │
-   ▼
-Validate DTO
-(Check required fields, email format and password validation.)
-   │
-   ▼
-Hash Password (bcrypt)
-(Password is converted into a secure hash before saving.)
-   │
-   ▼
-Prisma ORM
-(Prisma prepares the database query for user creation.)
-   │
-   ▼
-PostgreSQL
-(User information is securely stored in the database.)
-   │
-   ▼
-Registration Successful
-(User account is created and ready for login.)
+Employee Login
+-> Create Ticket
+-> Enter title, description, attachment filename
+-> Optional AI suggestion preview
+-> Submit ticket
+-> Backend stores AI category and priority
+-> Employee tracks ticket in My Tickets
 ```
 
----
-```text
-User
-   │
-   ▼
-Login Request
-(Example: email and password)
-   │
-   ▼
-Find User
-(Search user by email in PostgreSQL.)
-   │
-   ▼
-Compare Password
-(Compare entered password with stored bcrypt hash.)
-   │
-   ▼
-Generate JWT
-(Create a signed access token for the authenticated user.)
-   │
-   ▼
-Return JWT
-(Client receives the token for future authenticated requests.)
-```
-
-----
-
-## Protected API Flow
-
+### Agent Resolution Flow
 
 ```text
-Client Request
-(Example: GET /tickets)
-   │
-   ▼
-JWT Guard
-(Verify token signature and check whether token is valid.)
-   │
-   ▼
-Roles Guard
-(Check whether the logged-in user has required permissions.)
-   │
-   ▼
-Controller
-(Receive the request after authentication and authorization.)
-   │
-   ▼
-Service
-(Execute business logic for the requested operation.)
-   │
-   ▼
-Prisma ORM
-(Convert service request into SQL queries.)
-   │
-   ▼
-PostgreSQL
-(Return requested data or update database records.)
+Agent Login
+-> Open All Tickets
+-> Filter or search ticket
+-> Open ticket detail
+-> Review AI category and priority
+-> Review AI draft reply and citations
+-> Override category/priority if needed
+-> Edit final reply
+-> Send reply
+-> Ticket becomes Resolved
 ```
 
----
+## API Connection
 
-## Ticket Creation Flow
+The frontend uses Axios from:
 
 ```text
-Employee
-(Create a new support ticket.)
-   │
-   ▼
-Ticket Controller
-(Receive title, description and attachment filename.)
-   │
-   ▼
-Ticket Service
-(Process ticket creation request.)
-   │
-   ▼
-AI Service
-(Send ticket description to the LLM.)
-   │
-   ▼
-Groq LLM
-(Generate suggested category and priority.)
-   │
-   ▼
-Prisma ORM
-(Prepare ticket data for database insertion.)
-   │
-   ▼
-PostgreSQL
-(Store ticket with AI-generated suggestions.)
+src/services/api.js
 ```
 
----
-
-## RAG Pipeline
+Default backend URL:
 
 ```text
-Agent Opens Ticket
-(Open ticket details.)
-   │
-   ▼
-Ticket Description
-(User problem is sent to the RAG pipeline.)
-   │
-   ▼
-Retriever
-(Search the most relevant knowledge base documents.)
-   │
-   ▼
-Knowledge Base
-(Return matching support articles.)
-   │
-   ▼
-Groq LLM
-(Generate a reply using retrieved context only.)
-   │
-   ▼
-AI Draft Reply
-(Return reply with citations.)
-   │
-   ▼
-Agent Reviews
-(Edit or approve the AI-generated response.)
-   │
-   ▼
-Final Reply Saved
-(Store final reply in PostgreSQL and resolve the ticket.)
+http://localhost:3000
 ```
 
----
-
-## Override Flow
+JWT token is stored in `localStorage` after login and sent automatically in the `Authorization` header:
 
 ```text
-Agent
-    │
-    ▼
-Change Category/Priority
-    │
-    ▼
-Update Ticket
-    │
-    ▼
-Create Audit Log
-    │
-    ▼
-PostgreSQL
+Authorization: Bearer <token>
 ```
 
----
+## Important Routes Used By Frontend
 
-# Features
+| Method | Endpoint | Used For |
+|--------|----------|----------|
+| POST | /auth/register | Register user |
+| POST | /auth/login | Login user |
+| GET | /ai/category-priority | AI category/priority preview |
+| POST | /tickets | Create employee ticket |
+| GET | /tickets/my | Employee ticket list |
+| GET | /tickets | Agent ticket list |
+| GET | /tickets/:id | Ticket detail |
+| PATCH | /tickets/:id/override | Agent override |
+| PATCH | /tickets/:id/reply | Agent reply and resolve |
 
-### Authentication
+## How To Run
 
-- User Registration
-- User Login
-- JWT Authentication
-- Password Hashing using bcrypt
+Install dependencies:
 
-### Authorization
+```powershell
+cd quickdesk-frontend
+npm install
+```
 
-- Employee Role
-- Agent Role
-- JWT Guard
-- Roles Guard
+Start development server:
 
-### Ticket Management
+```powershell
+npm run dev
+```
 
-- Create Ticket
-- View My Tickets
-- View All Tickets
-- Reply to Ticket
-- Resolve Ticket
+Build frontend:
 
-### AI Features
+```powershell
+npm run build
+```
 
-- AI Category Suggestion
-- AI Priority Suggestion
-- RAG-based Reply Suggestion
-- Citation Support
-- Override Audit Log
+Preview production build:
 
----
+```powershell
+npm run preview
+```
 
-# API Endpoints
+## Testing The Flow
 
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | /auth/register | Register User | No |
-| POST | /auth/login | Login User | No |
-| GET | /ai/category-priority | AI Category & Priority Suggestion | JWT |
-| POST | /tickets | Create Ticket | Employee |
-| GET | /tickets/my | Employee Tickets | Employee |
-| GET | /tickets | All Tickets | Agent |
-| GET | /tickets/:id | Ticket Detail | Employee / Agent |
-| PATCH | /tickets/:id/override | Override AI Suggestion | Agent |
-| PATCH | /tickets/:id/reply | Reply & Resolve Ticket | Agent |
+Example employee ticket:
 
+```text
+Title: Cannot connect to VPN
 
+Description:
+I am working remotely and cannot connect to the company VPN. The VPN client fails after login and MFA approval. I am blocked from accessing internal tools.
 
+Attachment filename:
+vpn-error.png
+```
+
+Expected AI suggestion:
+
+```text
+Category: IT
+Priority: HIGH
+```
+
+The agent should then open the ticket, see the AI draft reply, check citations, edit the reply if needed, and send the final response.
+
+## Current Status
+
+Completed in frontend:
+
+- Authentication screens
+- Role-based navigation
+- Employee ticket creation
+- AI suggestion preview
+- Employee ticket list
+- Agent all-ticket list
+- Filters and title search
+- Ticket detail view
+- AI draft reply display
+- Citation display
+- Category/priority override UI
+- Override audit log UI
+- Final reply editor
+- Resolved ticket display
+
+Pending or not fully implemented:
+
+- Real-time updates with Socket.io, WebSockets, or SSE
+- Agent metrics dashboard
+
+## Notes
+
+Role enforcement is handled by the backend. The frontend only improves the user experience by showing the correct screens and actions for each role.
+
+The AI draft reply is shown to the agent, but the agent remains responsible for the final message sent to the employee.
