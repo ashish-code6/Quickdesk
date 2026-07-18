@@ -1,72 +1,41 @@
 import { Injectable } from '@nestjs/common';
 import { TicketCategory, TicketPriority } from '@prisma/client';
 import Groq from 'groq-sdk';
+import { KNOWLEDGE_BASE, KnowledgeBaseArticle } from './knowledge-base';
 
 type CategoryPrioritySuggestion = {
   category: TicketCategory;
   priority: TicketPriority;
 };
 
-type KnowledgeBaseArticle = {
+type TicketForAi = {
+  title: string;
+  description: string;
+  category: TicketCategory;
+  priority: TicketPriority;
+};
+
+type Citation = {
   id: string;
   title: string;
-  content: string;
-  keywords: string[];
 };
 
 type DraftReplyResult = {
   aiDraftReply: string;
-  aiCitations: {
-    id: string;
-    title: string;
-  }[];
+  aiCitations: Citation[];
 };
-
-const KNOWLEDGE_BASE: KnowledgeBaseArticle[] = [
-  {
-    id: 'vpn-setup',
-    title: 'VPN Setup',
-    keywords: ['vpn', 'remote', 'network', 'connect', 'connection', 'client'],
-    content:
-      'Employees who need remote access should install the company VPN client from the IT portal, sign in with their work email, and approve the MFA prompt. If the VPN connects but internal tools do not load, disconnect and reconnect once, then restart the browser. Persistent VPN failures should include the error message, operating system, and whether home internet is working.',
-  },
-  {
-    id: 'password-reset-policy',
-    title: 'Password Reset Policy',
-    keywords: ['password', 'login', 'locked', 'reset', 'account', 'mfa'],
-    content:
-      'Employees can reset a forgotten password from the sign-in page using the Reset Password link. The reset requires MFA verification and a new password that has not been used recently. Locked accounts usually unlock after fifteen minutes, but urgent lockouts can be escalated to IT with the employee email and screenshot of the sign-in error.',
-  },
-  {
-    id: 'leave-application-process',
-    title: 'Leave Application Process',
-    keywords: ['leave', 'vacation', 'holiday', 'sick', 'pto', 'absence'],
-    content:
-      'Leave requests should be submitted through the HR portal with the leave type, start date, end date, and manager approval. Sick leave can be submitted after the employee returns if advance notice was not possible. HR reviews policy questions and can correct balances when an approved leave does not appear in the portal.',
-  },
-  {
-    id: 'expense-reimbursement',
-    title: 'Expense Reimbursement',
-    keywords: ['expense', 'reimbursement', 'receipt', 'finance', 'claim', 'payment'],
-    content:
-      'Expense claims must include a valid receipt, business purpose, cost center, and manager approval. Finance processes approved reimbursements in the next payroll cycle. Missing receipts or unclear business purposes delay payment, so employees should attach the invoice or card statement and explain the expense clearly.',
-  },
-  {
-    id: 'laptop-request',
-    title: 'Laptop Request',
-    keywords: ['laptop', 'hardware', 'device', 'replacement', 'new joiner', 'computer'],
-    content:
-      'Laptop requests are handled by Admin and IT. New employee devices should be requested at least five business days before the joining date. Replacement requests should include the current asset tag, issue description, and manager approval. Urgent hardware failures can be prioritized when the employee cannot work without the device.',
-  },
-];
 
 @Injectable()
 export class AiService {
-  private groq = process.env.GROQ_API_KEY
-    ? new Groq({
+  private groq: Groq | null = null;
+
+  constructor() {
+    if (process.env.GROQ_API_KEY) {
+      this.groq = new Groq({
         apiKey: process.env.GROQ_API_KEY,
-      })
-    : null;
+      });
+    }
+  }
 
   async generateCategoryAndPriority(
     title: string,
@@ -75,7 +44,7 @@ export class AiService {
     const ticketText = `${title}\n${description}`.trim();
 
     if (!this.groq) {
-      return this.localCategoryAndPriority(ticketText);
+      return this.getCategoryAndPriorityWithoutAi(ticketText);
     }
 
     try {
@@ -85,7 +54,7 @@ export class AiService {
           {
             role: 'system',
             content:
-              'Analyze the employee helpdesk ticket. Return only valid JSON: {"category":"IT|HR|FINANCE|ADMIN|OTHER","priority":"LOW|MEDIUM|HIGH"}',
+              'Return only JSON. Example: {"category":"IT","priority":"HIGH"}. Category must be IT, HR, FINANCE, ADMIN, or OTHER. Priority must be LOW, MEDIUM, or HIGH.',
           },
           {
             role: 'user',
@@ -94,33 +63,30 @@ export class AiService {
         ],
       });
 
-      return this.parseSuggestion(response.choices[0]?.message?.content);
+      const aiText = response.choices[0]?.message?.content;
+
+      return this.convertAiTextToSuggestion(aiText);
     } catch {
-      return this.localCategoryAndPriority(ticketText);
+      return this.getCategoryAndPriorityWithoutAi(ticketText);
     }
   }
 
-  async generateDraftReply(ticket: {
-    title: string;
-    description: string;
-    category: TicketCategory;
-    priority: TicketPriority;
-  }): Promise<DraftReplyResult> {
-    const articles = this.findRelevantArticles(`${ticket.title} ${ticket.description}`);
-    const aiCitations = articles.map(({ id, title }) => ({ id, title }));
+  async generateDraftReply(ticket: TicketForAi): Promise<DraftReplyResult> {
+    const articles = this.findMatchingArticles(ticket);
+    const citations = this.createCitations(articles);
 
     if (articles.length === 0) {
       return {
         aiDraftReply:
           'I could not find a relevant knowledge base article for this request. Please review the ticket manually before replying.',
-        aiCitations,
+        aiCitations: citations,
       };
     }
 
     if (!this.groq) {
       return {
-        aiDraftReply: this.localDraftReply(articles),
-        aiCitations,
+        aiDraftReply: this.createSimpleDraftReply(articles),
+        aiCitations: citations,
       };
     }
 
@@ -131,37 +97,35 @@ export class AiService {
           {
             role: 'system',
             content:
-              'Draft a concise helpdesk reply using only the supplied knowledge base articles. Do not invent facts. Include clear next steps.',
+              'Write a professional helpdesk reply in only 4 to 5 short lines. Use only the given knowledge base articles. Do not make up information.',
           },
           {
             role: 'user',
             content: JSON.stringify({
               ticket,
-              knowledgeBase: articles.map(({ title, content }) => ({ title, content })),
+              knowledgeBaseArticles: articles,
             }),
           },
         ],
       });
 
+      const aiDraft = response.choices[0]?.message?.content?.trim();
+
       return {
-        aiDraftReply:
-          response.choices[0]?.message?.content?.trim() || this.localDraftReply(articles),
-        aiCitations,
+        aiDraftReply: aiDraft || this.createSimpleDraftReply(articles),
+        aiCitations: citations,
       };
     } catch {
       return {
-        aiDraftReply: this.localDraftReply(articles),
-        aiCitations,
+        aiDraftReply: this.createSimpleDraftReply(articles),
+        aiCitations: citations,
       };
     }
   }
 
-  private parseSuggestion(content?: string | null): CategoryPrioritySuggestion {
+  private convertAiTextToSuggestion(content?: string | null): CategoryPrioritySuggestion {
     if (!content) {
-      return {
-        category: TicketCategory.OTHER,
-        priority: TicketPriority.MEDIUM,
-      };
+      return this.defaultSuggestion();
     }
 
     try {
@@ -174,66 +138,116 @@ export class AiService {
       const priority = parsed.priority?.toUpperCase();
 
       return {
-        category: this.isTicketCategory(category) ? category : TicketCategory.OTHER,
-        priority: this.isTicketPriority(priority) ? priority : TicketPriority.MEDIUM,
+        category: this.isValidCategory(category) ? category : TicketCategory.OTHER,
+        priority: this.isValidPriority(priority) ? priority : TicketPriority.MEDIUM,
       };
     } catch {
-      return {
-        category: TicketCategory.OTHER,
-        priority: TicketPriority.MEDIUM,
-      };
+      return this.defaultSuggestion();
     }
   }
 
-  private localCategoryAndPriority(text: string): CategoryPrioritySuggestion {
-    const normalized = text.toLowerCase();
-    const category = this.hasAny(normalized, ['leave', 'holiday', 'sick', 'pto'])
-      ? TicketCategory.HR
-      : this.hasAny(normalized, ['expense', 'reimbursement', 'invoice', 'payment'])
-        ? TicketCategory.FINANCE
-        : this.hasAny(normalized, ['laptop', 'device', 'hardware', 'admin'])
-          ? TicketCategory.ADMIN
-          : this.hasAny(normalized, ['password', 'vpn', 'login', 'network', 'software', 'wifi'])
-            ? TicketCategory.IT
-            : TicketCategory.OTHER;
+  private getCategoryAndPriorityWithoutAi(text: string): CategoryPrioritySuggestion {
+    const lowerText = text.toLowerCase();
+    let category: TicketCategory = TicketCategory.OTHER;
+    let priority: TicketPriority = TicketPriority.LOW;
 
-    const priority = this.hasAny(normalized, ['urgent', 'blocked', 'cannot work', 'down', 'critical'])
-      ? TicketPriority.HIGH
-      : this.hasAny(normalized, ['soon', 'delay', 'issue', 'problem'])
-        ? TicketPriority.MEDIUM
-        : TicketPriority.LOW;
+    if (this.containsAnyWord(lowerText, ['password', 'vpn', 'login', 'network', 'software', 'wifi'])) {
+      category = TicketCategory.IT;
+    }
 
-    return { category, priority };
+    if (this.containsAnyWord(lowerText, ['leave', 'holiday', 'sick', 'pto'])) {
+      category = TicketCategory.HR;
+    }
+
+    if (this.containsAnyWord(lowerText, ['expense', 'reimbursement', 'invoice', 'payment'])) {
+      category = TicketCategory.FINANCE;
+    }
+
+    if (this.containsAnyWord(lowerText, ['laptop', 'device', 'hardware', 'admin'])) {
+      category = TicketCategory.ADMIN;
+    }
+
+    if (this.containsAnyWord(lowerText, ['soon', 'delay', 'issue', 'problem'])) {
+      priority = TicketPriority.MEDIUM;
+    }
+
+    if (this.containsAnyWord(lowerText, ['urgent', 'blocked', 'cannot work', 'down', 'critical'])) {
+      priority = TicketPriority.HIGH;
+    }
+
+    return {
+      category,
+      priority,
+    };
   }
 
-  private findRelevantArticles(query: string): KnowledgeBaseArticle[] {
-    const normalized = query.toLowerCase();
+  private findMatchingArticles(ticket: TicketForAi): KnowledgeBaseArticle[] {
+    const ticketText = `${ticket.title} ${ticket.description}`.toLowerCase();
+    const matchingArticles: {
+      article: KnowledgeBaseArticle;
+      score: number;
+    }[] = [];
 
-    return KNOWLEDGE_BASE.map((article) => ({
-      article,
-      score: article.keywords.filter((keyword) => normalized.includes(keyword)).length,
-    }))
-      .filter(({ score }) => score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 2)
-      .map(({ article }) => article);
+    for (const article of KNOWLEDGE_BASE) {
+      let score = 0;
+
+      for (const keyword of article.keywords) {
+        if (ticketText.includes(keyword)) {
+          score = score + 1;
+        }
+      }
+
+      if (score > 0) {
+        matchingArticles.push({
+          article,
+          score,
+        });
+      }
+    }
+
+    matchingArticles.sort((a, b) => b.score - a.score);
+
+    return matchingArticles.slice(0, 2).map((item) => item.article);
   }
 
-  private localDraftReply(articles: KnowledgeBaseArticle[]): string {
-    const titles = articles.map((article) => article.title).join(', ');
-
-    return `Thanks for raising this ticket. Based on the knowledge base article(s): ${titles}, please follow the documented steps and share any requested details or screenshots if the issue continues.`;
+  private createCitations(articles: KnowledgeBaseArticle[]): Citation[] {
+    return articles.map((article) => ({
+      id: article.id,
+      title: article.title,
+    }));
   }
 
-  private hasAny(text: string, keywords: string[]): boolean {
-    return keywords.some((keyword) => text.includes(keyword));
+  private createSimpleDraftReply(articles: KnowledgeBaseArticle[]): string {
+    const articleTitles = articles.map((article) => article.title).join(', ');
+
+    return `Thank you for raising this ticket.
+Based on the knowledge base article(s): ${articleTitles}, please follow the documented steps.
+If the issue continues, share the error message and any relevant screenshot.
+We will review the details and assist you further.`;
   }
 
-  private isTicketCategory(value?: string): value is TicketCategory {
+  private defaultSuggestion(): CategoryPrioritySuggestion {
+    return {
+      category: TicketCategory.OTHER,
+      priority: TicketPriority.MEDIUM,
+    };
+  }
+
+  private containsAnyWord(text: string, words: string[]): boolean {
+    for (const word of words) {
+      if (text.includes(word)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private isValidCategory(value?: string): value is TicketCategory {
     return Object.values(TicketCategory).includes(value as TicketCategory);
   }
 
-  private isTicketPriority(value?: string): value is TicketPriority {
+  private isValidPriority(value?: string): value is TicketPriority {
     return Object.values(TicketPriority).includes(value as TicketPriority);
   }
 }
