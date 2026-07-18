@@ -5,6 +5,7 @@ import { ReplyTicketDto } from './dto/reply-ticket.dto';
 import { Prisma, Role, TicketStatus } from '@prisma/client';
 import { OverrideTicketDto } from './dto/override-ticket.dto';
 import { AiService } from 'src/ai/ai.service';
+import { TicketsGateway } from './tickets.gateway';
 
 
 @Injectable()
@@ -13,6 +14,7 @@ export class TicketsService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly aiService: AiService,
+        private readonly ticketsGateway: TicketsGateway,
     ) { }
 
 
@@ -40,7 +42,7 @@ export class TicketsService {
     createTicketDto.description,
   );
 
-  return await this.prisma.ticket.create({
+  const ticket = await this.prisma.ticket.create({
 
     data: {
       ...createTicketDto,
@@ -55,6 +57,10 @@ export class TicketsService {
     },
 
   });
+
+  this.ticketsGateway.sendNewTicketToAgents(ticket);
+
+  return ticket;
 
 }
 
@@ -294,7 +300,7 @@ export class TicketsService {
   replyTicketDto: ReplyTicketDto,
 ) {
 
-  return await this.prisma.ticket.update({
+  const ticket = await this.prisma.ticket.update({
 
     where: {
       id,
@@ -307,6 +313,13 @@ export class TicketsService {
     },
 
   });
+
+  this.ticketsGateway.sendResolvedTicket({
+    id: ticket.id,
+    userId: ticket.userId,
+  });
+
+  return ticket;
 
 }
 
