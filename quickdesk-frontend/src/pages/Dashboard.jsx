@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PlusCircle, TicketCheck } from "lucide-react";
 import api from "../services/api";
+import socket from "../services/socket";
 import { formatTicketStatus, getStatusBadgeClass } from "../utils/ticketStyles";
 
 const Dashboard = () => {
@@ -11,7 +12,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadTickets = async () => {
+    async function loadTickets() {
       try {
         const { data } = await api.get(isAgent ? "/tickets" : "/tickets/my");
         setTickets(data);
@@ -20,9 +21,17 @@ const Dashboard = () => {
       } finally {
         setLoading(false);
       }
-    };
+    }
 
     loadTickets();
+
+    socket.on("newTicketCreated", loadTickets);
+    socket.on("ticketResolved", loadTickets);
+
+    return () => {
+      socket.off("newTicketCreated", loadTickets);
+      socket.off("ticketResolved", loadTickets);
+    };
   }, [isAgent]);
 
   const stats = useMemo(() => {
