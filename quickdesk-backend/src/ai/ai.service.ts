@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { TicketCategory, TicketPriority } from '@prisma/client';
+import { Document } from '@langchain/core/documents';
+import { Embeddings } from '@langchain/core/embeddings';
+import { RunnableLambda, RunnableSequence } from '@langchain/core/runnables';
+import { MemoryVectorStore } from '@langchain/classic/vectorstores/memory';
 import Groq from 'groq-sdk';
 import { KNOWLEDGE_BASE, KnowledgeBaseArticle } from './knowledge-base';
 
@@ -25,9 +29,62 @@ type DraftReplyResult = {
   aiCitations: Citation[];
 };
 
+type DraftReplyChainContext = {
+  ticket: TicketForAi;
+  ticketText: string;
+  articles: KnowledgeBaseArticle[];
+  citations: Citation[];
+};
+
+const EMBEDDING_WORDS = [
+  'vpn',
+  'remote',
+  'network',
+  'password',
+  'login',
+  'locked',
+  'reset',
+  'mfa',
+  'leave',
+  'vacation',
+  'sick',
+  'expense',
+  'reimbursement',
+  'receipt',
+  'finance',
+  'laptop',
+  'hardware',
+  'device',
+  'replacement',
+  'admin',
+];
+
+class SimpleHelpdeskEmbeddings extends Embeddings {
+  constructor() {
+    super({});
+  }
+
+  async embedDocuments(documents: string[]): Promise<number[][]> {
+    return documents.map((document) => this.createVector(document));
+  }
+
+  async embedQuery(document: string): Promise<number[]> {
+    return this.createVector(document);
+  }
+
+  private createVector(text: string): number[] {
+    const lowerText = text.toLowerCase();
+
+    return EMBEDDING_WORDS.map((word) => {
+      return lowerText.includes(word) ? 1 : 0;
+    });
+  }
+}
+
 @Injectable()
 export class AiService {
   private groq: Groq | null = null;
+  private vectorStorePromise: Promise<MemoryVectorStore>;
 
   constructor() {
     if (process.env.GROQ_API_KEY) {
@@ -35,6 +92,8 @@ export class AiService {
         apiKey: process.env.GROQ_API_KEY,
       });
     }
+
+    this.vectorStorePromise = this.createVectorStore();
   }
 
   async generateCategoryAndPriority(
@@ -72,53 +131,16 @@ export class AiService {
   }
 
   async generateDraftReply(ticket: TicketForAi): Promise<DraftReplyResult> {
-    const articles = this.findMatchingArticles(ticket);
-    const citations = this.createCitations(articles);
-
-    if (articles.length === 0) {
-      return {
-        aiDraftReply:
-          'I could not find a relevant knowledge base article for this request. Please review the ticket manually before replying.',
-        aiCitations: citations,
-      };
-    }
-
-    if (!this.groq) {
-      return {
-        aiDraftReply: this.createSimpleDraftReply(articles),
-        aiCitations: citations,
-      };
-    }
-
     try {
-      const response = await this.groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Write a professional helpdesk reply in only 4 to 5 short lines. Use only the given knowledge base articles. Do not make up information.',
-          },
-          {
-            role: 'user',
-            content: JSON.stringify({
-              ticket,
-              knowledgeBaseArticles: articles,
-            }),
-          },
-        ],
-      });
+      const draftReplyChain = this.createDraftReplyChain();
 
-      const aiDraft = response.choices[0]?.message?.content?.trim();
-
-      return {
-        aiDraftReply: aiDraft || this.createSimpleDraftReply(articles),
-        aiCitations: citations,
-      };
+      return await draftReplyChain.invoke(ticket);
     } catch {
+      const articles = await this.findMatchingArticlesWithLangChain(ticket);
+
       return {
         aiDraftReply: this.createSimpleDraftReply(articles),
-        aiCitations: citations,
+        aiCitations: this.createCitations(articles),
       };
     }
   }
@@ -181,35 +203,133 @@ export class AiService {
     };
   }
 
-  private findMatchingArticles(ticket: TicketForAi): KnowledgeBaseArticle[] {
-    const ticketText = `${ticket.title} ${ticket.description}`.toLowerCase();
-    const matchingArticles: {
-      article: KnowledgeBaseArticle;
-      score: number;
-    }[] = [];
+  private async findMatchingArticlesWithLangChain(
+    ticket: TicketForAi,
+  ): Promise<KnowledgeBaseArticle[]> {
+    const ticketText = `${ticket.title} ${ticket.description}`;
+    const hasKeywordMatch = this.hasKnowledgeBaseKeyword(ticketText);
+
+    if (!hasKeywordMatch) {
+      return [];
+    }
+
+    const vectorStore = await this.vectorStorePromise;
+    const documents = await vectorStore.similaritySearch(ticketText, 2);
+
+    return documents.map((document) => ({
+      id: String(document.metadata.id),
+      title: String(document.metadata.title),
+      content: document.pageContent,
+      keywords: document.metadata.keywords as string[],
+    }));
+  }
+
+  private createDraftReplyChain(): RunnableSequence<TicketForAi, DraftReplyResult> {
+    return RunnableSequence.from([
+      RunnableLambda.from((ticket: TicketForAi) => {
+        return {
+          ticket,
+          ticketText: `${ticket.title} ${ticket.description}`,
+          articles: [],
+          citations: [],
+        };
+      }),
+      RunnableLambda.from((context) => this.addMatchingArticles(context)),
+      RunnableLambda.from((context) => this.addCitations(context)),
+      RunnableLambda.from((context) => this.writeDraftReply(context)),
+    ]);
+  }
+
+  private async addMatchingArticles(
+    context: DraftReplyChainContext,
+  ): Promise<DraftReplyChainContext> {
+    const articles = await this.findMatchingArticlesWithLangChain(context.ticket);
+
+    return {
+      ...context,
+      articles,
+    };
+  }
+
+  private addCitations(context: DraftReplyChainContext): DraftReplyChainContext {
+    return {
+      ...context,
+      citations: this.createCitations(context.articles),
+    };
+  }
+
+  private async writeDraftReply(
+    context: DraftReplyChainContext,
+  ): Promise<DraftReplyResult> {
+    if (context.articles.length === 0) {
+      return {
+        aiDraftReply:
+          'I could not find a relevant knowledge base article for this request. Please review the ticket manually before replying.',
+        aiCitations: context.citations,
+      };
+    }
+
+    if (!this.groq) {
+      return {
+        aiDraftReply: this.createSimpleDraftReply(context.articles),
+        aiCitations: context.citations,
+      };
+    }
+
+    const response = await this.groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Write a professional helpdesk reply in only 4 to 5 short lines. Use only the given knowledge base articles. Do not make up information.',
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            ticket: context.ticket,
+            knowledgeBaseArticles: context.articles,
+          }),
+        },
+      ],
+    });
+
+    const aiDraft = response.choices[0]?.message?.content?.trim();
+
+    return {
+      aiDraftReply: aiDraft || this.createSimpleDraftReply(context.articles),
+      aiCitations: context.citations,
+    };
+  }
+
+  private async createVectorStore(): Promise<MemoryVectorStore> {
+    const documents = KNOWLEDGE_BASE.map((article) => {
+      return new Document({
+        pageContent: article.content,
+        metadata: {
+          id: article.id,
+          title: article.title,
+          keywords: article.keywords,
+        },
+      });
+    });
+
+    return MemoryVectorStore.fromDocuments(documents, new SimpleHelpdeskEmbeddings());
+  }
+
+  private hasKnowledgeBaseKeyword(text: string): boolean {
+    const lowerText = text.toLowerCase();
 
     for (const article of KNOWLEDGE_BASE) {
-      let score = 0;
-
       for (const keyword of article.keywords) {
-        if (ticketText.includes(keyword)) {
-          score = score + 1;
+        if (lowerText.includes(keyword)) {
+          return true;
         }
-      }
-
-      if (score > 0) {
-        matchingArticles.push({
-          article,
-          score,
-        });
       }
     }
 
-    matchingArticles.sort((a, b) => b.score - a.score);
-
-    return matchingArticles.slice(0, 2).map((item) => item.article);
+    return false;
   }
-
   private createCitations(articles: KnowledgeBaseArticle[]): Citation[] {
     return articles.map((article) => ({
       id: article.id,

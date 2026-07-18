@@ -19,9 +19,7 @@ This repository contains both apps:
 | Auth | JWT |
 | Password Hashing | bcrypt |
 | LLM Provider | Groq free tier, Llama 3.3 model |
-| RAG / Knowledge Base | In-memory knowledge base with keyword retrieval |
-
-Note: the assignment asks for LangChain. The current implementation uses a simple in-memory retriever instead of LangChain. I kept this documented honestly under limitations.
+| RAG / Knowledge Base | LangChain MemoryVectorStore with simple local embeddings |
 
 ## Features
 
@@ -155,8 +153,9 @@ Ticket text
 
 RAG Flow:
 Ticket text
-   -> Keyword retriever
-   -> Matching knowledge-base articles
+   -> LangChain draft-reply chain
+   -> MemoryVectorStore similarity search
+   -> Matching knowledge-base articles + citations
    -> Groq prompt with retrieved articles
    -> Short AI draft reply + citations
 ```
@@ -203,15 +202,15 @@ I picked React with Vite because this project is an internal dashboard-style app
 
 ### b) How is the RAG pipeline structured?
 
-The current RAG flow is intentionally small. The knowledge base lives in `quickdesk-backend/src/ai/knowledge-base.ts`. Each article has an id, title, content, and keywords. When an agent opens a ticket, the backend compares ticket text with article keywords, picks the top two matching articles, sends those articles to Groq, and stores the AI draft reply with citations.
+The current RAG flow is intentionally small. The knowledge base lives in `quickdesk-backend/src/ai/knowledge-base.ts`. Each article has an id, title, content, and keywords. When an agent opens a ticket, the backend runs a simple LangChain chain: prepare the ticket text, retrieve the top matching articles from a MemoryVectorStore, create citations, send those articles to Groq, and store the AI draft reply with citations.
 
 Current chunk size: each article is short enough to use as one chunk, around 100-300 words.
 
-Current retriever: keyword matching in memory.
+Current retriever: LangChain MemoryVectorStore with simple local keyword-style embeddings.
 
 Current prompt: asks the model to use only the provided articles and produce a professional 4-5 line reply.
 
-Tradeoff: this is easier to inspect and test, but it is not as strong as embeddings with LangChain MemoryVectorStore.
+Tradeoff: this is easy to inspect and test, but the local embeddings are still simple and weaker than production embeddings from a hosted model.
 
 ### c) What if the LLM returns an invalid category?
 
@@ -254,7 +253,7 @@ Failure mode: if the socket disconnects mid-session, the user may miss a live up
 
 ### g) Worst failure mode today
 
-The worst failure mode today is that the AI/RAG path is still simple and can produce a draft that is too generic if keyword retrieval finds weak matches. To improve it, I would add LangChain with embeddings, a MemoryVectorStore, confidence thresholds, and stronger fallback behavior when no article is relevant.
+The worst failure mode today is that the AI/RAG path can produce a draft that is too generic if retrieval finds weak matches. To improve it, I would add production embeddings, confidence thresholds, and stronger fallback behavior when no article is relevant.
 
 ### h) Where did AI tools help or hurt?
 
@@ -264,7 +263,7 @@ AI helped most with quickly shaping repetitive code, README structure, and think
 
 - Add Socket.io real-time updates
 - Add an agent metrics dashboard
-- Replace keyword retrieval with LangChain embeddings and MemoryVectorStore
+- Replace simple local embeddings with production embeddings
 - Seed sample employee and KB articles through Prisma
 - Add backend filtering/search query params
 - Add automated e2e tests for role enforcement
@@ -276,7 +275,7 @@ AI helped most with quickly shaping repetitive code, README structure, and think
 
 - Real-time updates are not implemented yet.
 - Agent metrics dashboard is not implemented yet.
-- LangChain is not wired yet; current RAG uses in-memory keyword retrieval.
+- RAG uses a small in-memory knowledge base instead of database-seeded articles.
 - The seed script currently creates one sample agent only.
 - Knowledge base articles are stored in code, not seeded into the database.
 - JWT is stored in localStorage for simplicity.
