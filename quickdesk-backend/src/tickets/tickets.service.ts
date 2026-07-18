@@ -4,6 +4,7 @@ import { CreateTicketDto } from './dto/create-ticket.dto';
 import { ReplyTicketDto } from './dto/reply-ticket.dto';
 import { Role, TicketStatus } from '@prisma/client';
 import { OverrideTicketDto } from './dto/override-ticket.dto';
+import { AiService } from 'src/ai/ai.service';
 
 
 @Injectable()
@@ -11,22 +12,51 @@ export class TicketsService {
 
     constructor(
         private readonly prisma: PrismaService,
+        private readonly aiService: AiService,
     ) { }
 
 
+    // async create(
+    //     createTicketDto: CreateTicketDto,
+    //     userId: string,
+    // ) {
+
+    //     return await this.prisma.ticket.create({
+    //         data: {
+    //             ...createTicketDto,
+    //             userId,
+    //         },
+    //     });
+
+    // }
+
     async create(
-        createTicketDto: CreateTicketDto,
-        userId: string,
-    ) {
+  createTicketDto: CreateTicketDto,
+  userId: string,
+) {
 
-        return await this.prisma.ticket.create({
-            data: {
-                ...createTicketDto,
-                userId,
-            },
-        });
+  const aiResponse =
+    await this.aiService.generateCategoryAndPriority(
+      createTicketDto.description,
+    );
 
-    }
+  return await this.prisma.ticket.create({
+
+    data: {
+      ...createTicketDto,
+
+      userId,
+
+      category: aiResponse.category,
+
+      priority: aiResponse.priority,
+
+      aiSuggested: true,
+    },
+
+  });
+
+}
 
     async findMyTickets(
         userId: string,
