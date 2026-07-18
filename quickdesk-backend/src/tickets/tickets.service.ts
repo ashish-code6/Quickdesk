@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { ReplyTicketDto } from './dto/reply-ticket.dto';
-import { Role, TicketStatus } from '@prisma/client';
+import { Prisma, Role, TicketStatus } from '@prisma/client';
 import { OverrideTicketDto } from './dto/override-ticket.dto';
 import { AiService } from 'src/ai/ai.service';
 
@@ -35,10 +35,10 @@ export class TicketsService {
   userId: string,
 ) {
 
-  const aiResponse =
-    await this.aiService.generateCategoryAndPriority(
-      createTicketDto.description,
-    );
+  const aiResponse = await this.aiService.generateCategoryAndPriority(
+    createTicketDto.title,
+    createTicketDto.description,
+  );
 
   return await this.prisma.ticket.create({
 
@@ -145,6 +145,48 @@ export class TicketsService {
 
         if (user.role !== Role.AGENT && ticket.userId !== user.id) {
             throw new ForbiddenException('You can only view your own tickets');
+        }
+
+        if (user.role === Role.AGENT && !ticket.aiDraftReply) {
+            const draft = await this.aiService.generateDraftReply({
+                title: ticket.title,
+                description: ticket.description,
+                category: ticket.category,
+                priority: ticket.priority,
+            });
+
+            return await this.prisma.ticket.update({
+                where: {
+                    id,
+                },
+                data: {
+                    aiDraftReply: draft.aiDraftReply,
+                    aiCitations: draft.aiCitations as Prisma.InputJsonValue,
+                },
+                include: {
+                    user: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                        },
+                    },
+                    overrideLogs: {
+                        include: {
+                            agent: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    email: true,
+                                },
+                            },
+                        },
+                        orderBy: {
+                            createdAt: 'desc',
+                        },
+                    },
+                },
+            });
         }
 
         return ticket;

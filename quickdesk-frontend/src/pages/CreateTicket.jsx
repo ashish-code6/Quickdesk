@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Paperclip, Send } from "lucide-react";
+import { FileText, Paperclip, Send, Sparkles } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../services/api";
 
@@ -13,6 +13,8 @@ const CreateTicket = () => {
     description: "",
     attachment: "",
   });
+  const [suggestion, setSuggestion] = useState(null);
+  const [suggesting, setSuggesting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const handleChange = (e) => {
@@ -20,6 +22,36 @@ const CreateTicket = () => {
       ...formData,
       [e.target.name]: e.target.value,
     });
+
+    if (e.target.name === "description") {
+      setSuggestion(null);
+    }
+  };
+
+  const handleSuggest = async () => {
+    if (!formData.description.trim()) {
+      toast.error("Description is required for AI suggestion");
+      return;
+    }
+
+    setSuggesting(true);
+
+    try {
+      const { data } = await api.get("/ai/category-priority", {
+        params: {
+          title: formData.title,
+          description: formData.description,
+        },
+      });
+
+      setSuggestion(data);
+      toast.success("AI suggestion ready");
+    } catch (error) {
+      setSuggestion(null);
+      toast.error(error.response?.data?.message || "Unable to generate suggestion");
+    } finally {
+      setSuggesting(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -27,13 +59,13 @@ const CreateTicket = () => {
     setSubmitting(true);
 
     try {
-      await api.post("/tickets", {
+      const { data } = await api.post("/tickets", {
         title: formData.title,
         description: formData.description,
         attachment: formData.attachment || undefined,
       });
 
-      toast.success("Ticket submitted");
+      toast.success(`Ticket submitted: ${data.category} / ${data.priority}`);
       navigate("/tickets");
     } catch (error) {
       toast.error(error.response?.data?.message || "Ticket submission failed");
@@ -77,7 +109,18 @@ const CreateTicket = () => {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Description</label>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="block text-sm font-medium text-slate-700">Description</label>
+              <button
+                type="button"
+                onClick={handleSuggest}
+                disabled={suggesting || submitting}
+                className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Sparkles size={15} />
+                {suggesting ? "Suggesting..." : "Suggest with AI"}
+              </button>
+            </div>
             <textarea
               name="description"
               value={formData.description}
@@ -87,6 +130,20 @@ const CreateTicket = () => {
               placeholder="Describe the issue clearly..."
               className="w-full resize-none rounded-lg border border-slate-300 p-3 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100"
             />
+            {suggestion && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-sm text-indigo-900">
+                <span className="inline-flex items-center gap-1 font-semibold">
+                  <Sparkles size={15} />
+                  AI Suggestion
+                </span>
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold ring-1 ring-indigo-100">
+                  Category: {suggestion.category}
+                </span>
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold ring-1 ring-indigo-100">
+                  Priority: {suggestion.priority}
+                </span>
+              </div>
+            )}
           </div>
 
           <div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Search, Sparkles } from "lucide-react";
 import api from "../services/api";
 import { formatTicketStatus, getStatusBadgeClass } from "../utils/ticketStyles";
 
@@ -110,7 +110,12 @@ const MyTickets = () => {
                     {formatTicketStatus(ticket.status)}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-sm text-slate-600">{ticket.category}</td>
+                <td className="px-4 py-3 text-sm text-slate-600">
+                  <span className="inline-flex items-center gap-1.5">
+                    {ticket.category}
+                    {ticket.aiSuggested && <Sparkles size={14} className="text-indigo-500" />}
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-sm text-slate-600">{ticket.priority}</td>
                 <td className="px-4 py-3 text-right">
                   <Link to={`/tickets/${ticket.id}`} className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">

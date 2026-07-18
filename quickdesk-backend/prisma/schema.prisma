@@ -34,6 +34,8 @@ model Ticket {
   category    TicketCategory   @default(OTHER)
   priority    TicketPriority   @default(MEDIUM)
   aiSuggested Boolean          @default(true)
+  aiDraftReply String?
+  aiCitations  Json?
   finalReply  String?
   resolvedAt  DateTime?
   userId      String

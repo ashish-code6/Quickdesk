@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, ChevronLeft, ChevronRight, History, Paperclip, Save, Send } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, History, Paperclip, Save, Send, Sparkles } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../services/api";
 import { formatTicketStatus, getStatusBadgeClass } from "../utils/ticketStyles";
@@ -32,6 +32,7 @@ const TicketDetails = () => {
         category: data.category,
         priority: data.priority,
       });
+      setFinalReply((current) => current || data.aiDraftReply || "");
       setAuditPage(1);
     } catch {
       setTicket(null);
@@ -167,6 +168,26 @@ const TicketDetails = () => {
                 )}
               </div>
 
+              {ticket.aiDraftReply && (
+                <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 p-4">
+                  <p className="inline-flex items-center gap-2 text-sm font-semibold text-indigo-900">
+                    <Sparkles size={16} />
+                    AI Draft
+                  </p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-indigo-900">{ticket.aiDraftReply}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(ticket.aiCitations || []).map((citation) => (
+                      <span key={citation.id} className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+                        {citation.title}
+                      </span>
+                    ))}
+                    {(ticket.aiCitations || []).length === 0 && (
+                      <span className="text-xs font-semibold text-indigo-700">No relevant KB article found</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <textarea
                 value={finalReply}
                 onChange={(e) => setFinalReply(e.target.value)}
@@ -197,7 +218,10 @@ const TicketDetails = () => {
             <div className="mt-3 grid grid-cols-3 gap-3 xl:grid-cols-1">
               <div className="rounded-lg bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase text-slate-500">Category</p>
-                <p className="mt-1 font-semibold text-slate-900">{ticket.category}</p>
+                <p className="mt-1 inline-flex items-center gap-1.5 font-semibold text-slate-900">
+                  {ticket.category}
+                  {ticket.aiSuggested && <Sparkles size={15} className="text-indigo-500" />}
+                </p>
               </div>
               <div className="rounded-lg bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase text-slate-500">Priority</p>

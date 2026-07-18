@@ -14,10 +14,9 @@ import { CreateTicketDto } from './dto/create-ticket.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles/roles.guard';
 import { Roles } from 'src/common/decorators/roles/roles.decorator';
-import { Role } from 'generated/prisma/enums';
+import { Role } from '@prisma/client';
 import { ReplyTicketDto } from './dto/reply-ticket.dto';
 import { OverrideTicketDto } from './dto/override-ticket.dto';
-import { AiService } from 'src/ai/ai.service';
 // import { Role } from 'generated/prisma';
 
 @Controller('tickets')
@@ -25,8 +24,6 @@ export class TicketsController {
 
     constructor(
         private readonly ticketsService: TicketsService,
-        private readonly aiservice:AiService,
-
     ) { }
 
     @UseGuards(JwtAuthGuard, RolesGuard)
