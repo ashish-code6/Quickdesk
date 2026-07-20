@@ -247,7 +247,7 @@ An employee cannot access an agent-only endpoint just by guessing the URL becaus
 
 ### f) Why Socket.io / WebSockets / SSE for real-time?
 
-Real-time updates are not implemented yet. If I add them, I would pick Socket.io because the app needs simple dashboard updates for ticket creation and resolution, and Socket.io handles reconnection better than raw WebSockets.
+ I would pick Socket.io because the app needs simple dashboard updates for ticket creation and resolution, and Socket.io handles reconnection better than raw WebSockets.
 
 Failure mode: if the socket disconnects mid-session, the user may miss a live update. The fix is to refetch tickets when the socket reconnects and also keep normal REST loading as the source of truth.
 
@@ -261,8 +261,6 @@ AI helped most with quickly shaping repetitive code, README structure, and think
 
 ## What I Would Do With More Time
 
-- Add Socket.io real-time updates
-- Add an agent metrics dashboard
 - Replace simple local embeddings with production embeddings
 - Seed sample employee and KB articles through Prisma
 - Add backend filtering/search query params
@@ -273,8 +271,6 @@ AI helped most with quickly shaping repetitive code, README structure, and think
 
 ## Known Issues / Limitations
 
-- Real-time updates are not implemented yet.
-- Agent metrics dashboard is not implemented yet.
 - RAG uses a small in-memory knowledge base instead of database-seeded articles.
 - The seed script currently creates one sample agent only.
 - Knowledge base articles are stored in code, not seeded into the database.
@@ -282,8 +278,3 @@ AI helped most with quickly shaping repetitive code, README structure, and think
 - Groq API key is optional, and local fallback logic is used if the key is missing or the model call fails.
 - Frontend filters are mostly client-side.
 
-
-
-## No Secrets In Git
-
-Do not commit real API keys. Use `.env` locally and keep `.env.example` with placeholder values only.
